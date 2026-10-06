@@ -164,7 +164,7 @@ What the columns mean:
 | `owner` | the legal owner Meta confirmed for the Page ("NIKE, Inc.") |
 | `other_accounts_json` | a linked account the intro card names (an Instagram handle) |
 | `post_id`, `posted_at`, `text` | a post's id, time (UTC) and full text; `title` is its first line (at most 120 characters) |
-| `reactions`, `comments`, `shares`, `video_views` | **exact** counts as Facebook sends them (checked against the displayed count on 67 posts) |
+| `reactions`, `comments`, `shares`, `video_views` | **exact** counts as Facebook sends them (the reaction count checked against the displayed count on all 67 captured posts) |
 | `position` | 1 = the first post the Page shows |
 
 Media URLs are signed CDN links and stop working after some days.
@@ -258,7 +258,7 @@ writes neither, so it never replaces your previous good file.
 | Exit | Meaning |
 |---|---|
 | `0` | complete (not-found and personal-profile addresses are listed, not failures) |
-| `6` | partial: rows were written, but the run did not finish cleanly — `stop_reason` says why (`blocked`, `not_painted`, `failed_pages`, `rejected_rows`, `remote_api_error`, `proxy_pool_exhausted`) |
+| `6` | partial: rows were written, but the run did not finish cleanly — `stop_reason` says why (`blocked`, `not_painted`, `failed_pages`, `rejected_rows`, `parse_error`, `remote_api_error`, `proxy_pool_exhausted`) |
 | `3` | blocked, no rows |
 | `4` | no rows: no address was a Page |
 | `5` | nothing could be read (fetch, parse or Scraper API failure); no rows |

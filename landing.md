@@ -34,7 +34,7 @@ Every row comes from the data a Page embeds in its own page, read by type rather
 | **Proxies — 2captcha.com/proxy** (2prx.com is the same product, different name) | Long lists from several addresses: residential exits in `.env` or `--proxy-file`, rotated per Page with per-exit failure tracking |
 | **Scraper API — 2captcha.com** | No browser at all: `--scraper-api` fetches each Page from 2Captcha's side, one HTTP call each (the Page and its first post) |
 | **Scraping Browser API — 2captcha.com** | A remote browser session over CDP with its own proxy, fingerprint and captcha auto-solve bundled — `--cdp-endpoint` |
-| **Browser fingerprints — 2captcha Fingerprint API** | Pin a specific OS/browser/country fingerprint for a locally-launched browser |
+| **Browser fingerprints — 2captcha Fingerprint API** | Pick a Fingerprint API profile by OS and country for a locally-launched browser (applied as its user agent) |
 
 ## Who this is for
 

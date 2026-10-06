@@ -232,7 +232,7 @@
       </div>
       <div class="addon">
         <h3>FINGERPRINTS</h3>
-        <p>Optional: pin a specific OS/browser/country fingerprint via the 2Captcha Fingerprint API for a locally-launched browser.</p>
+        <p>Optional: a 2Captcha Fingerprint API profile, picked by OS and country, applied as a locally-launched browser's user agent.</p>
       </div>
     </div>
   </section>
@@ -249,7 +249,7 @@
 <span class="cmt"># a list of Pages, as CSV</span><br>
 <span class="cmd">python3 playwright_scraper.py --urls-file pages.txt --format csv --out pages.csv</span><br><br>
 <span class="cmt"># run again later and see what changed: followers, contacts, post engagement</span><br>
-<span class="cmd">python3 diff_runs.py pages_monday.json pages_tuesday.json</span>
+<span class="cmd">python3 diff_runs.py pages_monday.csv pages_tuesday.csv</span>
     </div>
     <p style="color:var(--muted); font-size:14.5px; margin:22px 0 0;">
       Built for lead generation from business Pages, brand monitoring and competitor research — groups, events,

@@ -1,11 +1,11 @@
 # Testing with real credentials and the live site
 
-**Live status, 2026-10-06.** From one residential IP, logged out, no key
-and no proxy:
+**Live status, 2026-10-06.** From one residential IP, logged out, no
+proxy, and no key except for the `--scraper-api` row:
 
 | Engine | Run | Result |
 |---|---|---|
-| Playwright | `--urls-file` (10 Pages) `--posts 3` | 10/10 Pages, 30/30 posts, exit 0, 50s — `sample_output.*` is cut from this run |
+| Playwright | `--urls-file` (10 Pages) `--posts 3` | 10/10 Pages, 30/30 posts, exit 0, 50s |
 | Playwright | `--urls-file` (Nike by username, by profile URL; The New York Times; Shake Shack; a non-existent name; a group URL) `--posts 3` | 3 Page rows (Nike once), 9 posts; the non-existent name `not_found`; the group skipped unrequested; exit 0 |
 | Selenium | `--url bbcnews --posts 3` | 1 Page, 3 posts, exit 0 |
 | Puppeteer | `--url cnn --posts 3` | 1 Page, 3 posts, exit 0 |
@@ -47,6 +47,9 @@ here afterwards: exit 0); a login page served under the asked-for address
 Scraper API answer is now retried as an API error.
 
 **`--exact-likes`, 2026-10-06:** Nike 39,506,221 and BBC News 62,043,912
+in a first run, 39,506,247 and 62,043,921 in the run `sample_output.*` is
+cut from (`--posts 1 --exact-likes`, Nike and BBC News) — the counts move
+between runs
 (the Pages show 39M and 62M); a Page with no ads: `likes_exact` empty,
 `exact_likes: no_ads`, row kept, exit 0.
 

@@ -8,6 +8,18 @@ that changes a default is called out at the top of its entry.
 
 ## [Unreleased]
 
+## [0.1.1] - 2026-10-06
+
+Text only — no change to what is read or written.
+
+### Fixed
+
+- `--max-solves` help: the local solver is disabled, so it caps nothing
+  today (the README already said so); the landing pages no longer promise
+  a browser-specific fingerprint (`--fp-tags` filters by OS only).
+- The exit-code table lists every `stop_reason` a partial run can carry.
+- README says what was cross-checked on the 67 captured posts (the reaction count); TESTING names the run sample_output.* comes from and dates both exact-likes measurements; the --scraper-api row no longer sits under 'no key'; the landing page's diff example matches its CSV export.
+
 ## [0.1.0] - 2026-10-06
 
 First release: public Facebook Pages, read logged out. Run live on
