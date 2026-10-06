@@ -1,0 +1,42 @@
+# scraper output — large, machine-specific, stale by the time anyone reads it
+*.json
+*.csv
+!sample_output.json
+!sample_output.csv
+!tests/fixtures/*.json
+facebook_pages.*
+*_debug.html
+*_debug_*.html
+*_debug.png
+live_results/
+live/
+*.page[0-9]*
+
+# python
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.fingerprint_cache/
+*.egg-info/
+dist/
+build/
+venv/
+.venv/
+.venv-*/
+env/
+
+# node (puppeteer/selenium tooling, if any local scripts are added later)
+node_modules/
+
+# editor / OS
+.DS_Store
+*.swp
+.idea/
+.vscode/
+
+# secrets — `.env*` so a `.env.bak`/`.env.local` copy is never one `git add -A` away (CLAUDE.md §22)
+*.log
+.env*
+!.env.example
+*.key
+secrets*

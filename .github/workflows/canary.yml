@@ -1,0 +1,92 @@
+name: canary
+
+on:
+  schedule:
+    - cron: "41 6 * * *"   # once daily; avoid :00 so it doesn't pile up with everyone else's
+  workflow_dispatch: {}     # dispatch manually at least once before trusting the badge
+
+jobs:
+  # A real run: three public Pages and their three posts each, through a
+  # residential proxy, with a local Playwright Chromium. A GitHub runner is
+  # a datacentre address, and how facebook.com answers one has not been
+  # measured; so without the FACEBOOK_PROXY secret this job SKIPS with a
+  # notice rather than risk going red every day for the address's sake.
+  #
+  # `vars.FACEBOOK_CANARY_PAGES` overrides the Pages (space-separated,
+  # default "nike bbcnews nytimes"). Blocked, empty, partial and
+  # remote-error outcomes are red.
+  canary:
+    runs-on: ubuntu-latest
+    env:
+      HAS_PROXY: ${{ secrets.FACEBOOK_PROXY != '' }}
+      CANARY_PAGES: ${{ vars.FACEBOOK_CANARY_PAGES || 'nike bbcnews nytimes' }}
+      FACEBOOK_PROXY: ${{ secrets.FACEBOOK_PROXY }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Skip — no FACEBOOK_PROXY secret configured
+        if: env.HAS_PROXY != 'true'
+        run: |
+          echo "::notice::Skipping: no FACEBOOK_PROXY secret. Set it (a residential \
+          http://login:password@host:port proxy) as a repo secret to turn the canary on. \
+          This is a SKIP, not a pass or a fail."
+
+      - uses: actions/setup-python@v5
+        if: env.HAS_PROXY == 'true'
+        with:
+          python-version: "3.12"
+      - name: Install Playwright and Chromium
+        if: env.HAS_PROXY == 'true'
+        run: |
+          pip install -r requirements-playwright.txt
+          playwright install --with-deps chromium
+
+      # The proxy reaches the scraper through the environment only, never
+      # argv (env_config.py reads FACEBOOK_PROXY).
+      - name: Three Pages, three posts each
+        if: env.HAS_PROXY == 'true'
+        run: |
+          set +e
+          printf '%s\n' $CANARY_PAGES > canary_pages.txt
+          python3 playwright_scraper.py --urls-file canary_pages.txt --posts 3 \
+            --format json --out canary.json --dump-html
+          echo "canary_exit=$?" >> "$GITHUB_ENV"
+
+      - name: Require a complete run with full rows
+        if: env.HAS_PROXY == 'true'
+        run: |
+          python3 -c "
+          import json, os
+          code = int(os.environ['canary_exit'])
+          print(f'exit {code}')
+          if code != 0:
+              raise SystemExit(f'canary requires EXIT_OK=0, got {code}')
+          meta = json.load(open('canary.json.meta.json'))
+          print(json.dumps(meta, indent=2))
+          n = len(os.environ['CANARY_PAGES'].split())
+          assert meta['status'] == 'complete' and [p['result'] for p in meta['pages']] == ['ok'] * n, meta
+          rows = json.load(open('canary.json'))
+          pages = [r for r in rows if r['category'] == 'page']
+          posts = [r for r in rows if r['category'] == 'post']
+          assert len(pages) == n and len(posts) == 3 * n, (len(pages), len(posts))
+          for p in pages:
+              # Only the embedded header fills these; a regression to the
+              # login dialog's own text shows up here first.
+              assert p['sku'] == 'facebook-page-' + p['page_id'] and p['page_id'].isdigit(), p
+              assert p['title'] and p['page_category'] and p['followers'] and p['followers'] > 1000, p
+              assert p['is_verified'] is not None and p['website'], p
+          for r in posts:
+              assert r['post_id'].isdigit() and r['posted_at'] and r['product_url'], r
+              assert r['reactions'] is not None and r['comments'] is not None and r['shares'] is not None, r
+          print('canary: OK')
+          "
+
+      - name: Upload artifacts on every non-skipped run
+        if: always() && env.HAS_PROXY == 'true'
+        uses: actions/upload-artifact@v4
+        with:
+          name: canary-${{ github.run_id }}
+          path: |
+            canary*.json
+            canary_debug_*.html
+          retention-days: 14

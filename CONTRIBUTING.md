@@ -1,0 +1,9 @@
+# Contributing
+
+1. Fork, branch, make your change.
+2. Run `python3 smoke_test.py` (or `pytest tests/test_smoke.py`). It is offline and must pass with **no** engine installed; install one engine (`pip install -r requirements-playwright.txt`, or `-selenium` / `-puppeteer`) to exercise its code too.
+3. **If you touched `page_parser.py`**: every parser check runs on fixtures cut from real logged-out captures in `tests/fixtures/` (Nike, BBC News, DER SPIEGEL, McDonald's, the no-Page answer, and a timeline response). If the site changed shape, capture what it serves now, cut a fixture the same way — only the paths the parser reads, with their real values; no session tokens, no comments or commenters — update the parser to match, and add a `smoke_test.py` check against the new fixture. Don't change the parser on a guess without a capture behind it.
+4. Keep the three engines behaving identically: same exit codes, same `Product` schema, same CLI flags. The fetch logic itself lives once in `page_flow.fetch_page()`; an engine only supplies its driver's own page operations. If one engine has to diverge (see `selenium_scraper.py`'s CDP-credential limitation), say why in a comment.
+5. Open a PR. CI runs the offline suite on two Python versions, builds the wheel and the Docker image, and runs one `engine-smoke` job per engine in its own virtualenv. A daily `canary` job reads three live Pages with their posts through a residential proxy when the repo has the `FACEBOOK_PROXY` secret (see `TESTING.md`).
+
+Bug reports and feature requests: open an issue. Please include the exact command you ran (without credentials) and the `.meta.json` sidecar from the run — or say that none was written, which is itself informative (see `output_writer.finish_run`). If a Page came back blocked, not found or empty, a `--dump-html` capture is the most useful thing you can attach.
