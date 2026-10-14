@@ -8,6 +8,39 @@ that changes a default is called out at the top of its entry.
 
 ## [Unreleased]
 
+> **Behaviour changes.** (1) A bot challenge that does not clear is now
+> reported as blocked (exit 3) whatever HTTP status it came with; under
+> HTTP 200, or with Selenium (which has no status), it used to end as a
+> fetch error (exit 5). (2) Selenium and pyppeteer now refuse a negative
+> `--retries`, `--retry-delay`, `--delay-between-pages`, `--max-solves`
+> or `--proxy-block-retries` with exit 2, as Playwright already did for
+> most of them; a negative `--retries` used to run no navigation at all.
+> `--proxy-block-retries` is now validated in all three engines.
+> (3) Rewriting an existing output file keeps that file's mode (a 0640
+> file stays 0640); it used to be reset to 0666 minus the umask.
+> (4) `diff_runs.py` exits 2, not 1, when it refuses a comparison, so
+> `--fail-on-change`'s exit 1 means only "something changed".
+
+### Fixed
+
+- A `FACEBOOK_URL` set in the environment or `.env` no longer replaces a
+  `--urls-file` typed on the command line. `.env.example` ships the
+  variable commented out.
+- `diff_runs.py` watches `likes_exact` (with a delta), and marks a Page
+  `removed` when the address it was read from (for example a
+  `profile.php?id=` input) is the one the new run found gone, compared
+  case-insensitively. The sidecar's `pages` entries now carry the Page's
+  `sku` for that join.
+- The CSV sidecar records `csv_cells_escaped`, the number of cells the
+  formula guard changed, beside `csv_text_encoding`.
+- The credential scan no longer exempts `smoke_test.py` (its
+  credential-shaped fixtures are assembled from pieces), prints how many
+  files it read, and fails if it read almost none.
+- Source comments, check labels and workflow prompts state their rules
+  in this repository's own words instead of pointing at a file outside
+  it; a smoke check keeps it that way. Comments no longer name modules
+  that do not exist here.
+
 ## [0.1.1] - 2026-10-06
 
 Text only — no change to what is read or written.

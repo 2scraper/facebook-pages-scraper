@@ -70,12 +70,6 @@ log = logging.getLogger("puppeteer_scraper")
 _CHROMIUM_EXECUTABLE = os.environ.get("PYPPETEER_EXECUTABLE_PATH") or os.environ.get("PUPPETEER_EXECUTABLE_PATH")
 
 
-def _positive_int(value: str) -> int:
-    ivalue = int(value)
-    if ivalue < 1:
-        raise argparse.ArgumentTypeError(f"must be a positive integer (got {value!r})")
-    return ivalue
-
 
 def build_arg_parser() -> argparse.ArgumentParser:
     p = argparse.ArgumentParser(
@@ -83,20 +77,20 @@ def build_arg_parser() -> argparse.ArgumentParser:
         epilog="Credentials belong in .env / FACEBOOK_PROXY / TWOCAPTCHA_KEY — never on this command line.",
     )
     page_flow.add_page_arguments(p)
-    p.add_argument("--max-results", type=_positive_int, default=100, help="Pages to read in total (posts not counted); the rest of the list is left out and the run marked capped")
-    p.add_argument("--delay-between-pages", type=float, default=2.0)
+    p.add_argument("--max-results", type=page_flow.positive_int, default=100, help="Pages to read in total (posts not counted); the rest of the list is left out and the run marked capped")
+    p.add_argument("--delay-between-pages", type=page_flow.nonnegative_float, default=2.0)
     p.add_argument("--format", choices=["json", "csv"], default="json")
     p.add_argument("--out", default=None)
-    p.add_argument("--retries", type=int, default=2)
-    p.add_argument("--retry-delay", type=float, default=3.0)
+    p.add_argument("--retries", type=page_flow.nonnegative_int, default=2)
+    p.add_argument("--retry-delay", type=page_flow.nonnegative_float, default=3.0)
     p.add_argument("--proxy", default=None)
     p.add_argument("--proxy-file", default=None)
     p.add_argument("--proxy-shuffle", action="store_true")
-    p.add_argument("--proxy-block-retries", type=int, default=3)
+    p.add_argument("--proxy-block-retries", type=page_flow.nonnegative_int, default=3)
     p.add_argument("--twocaptcha-key", default=None)
     p.add_argument("--captcha-api", default=None, help="Override the 2Captcha API base URL (testing only)")
     p.add_argument("--solve-captcha", choices=["off", "when-blocked", "always"], default="when-blocked")
-    p.add_argument("--max-solves", type=int, default=8, help="Cap on paid 2Captcha solves for the whole run, recorded as solves_spent — kept for the local solver, which is disabled: nothing is solved or billed locally today (the Scraping Browser API auto-solves on its own)")
+    p.add_argument("--max-solves", type=page_flow.nonnegative_int, default=8, help="Cap on paid 2Captcha solves for the whole run, recorded as solves_spent — kept for the local solver, which is disabled: nothing is solved or billed locally today (the Scraping Browser API auto-solves on its own)")
     p.add_argument("--min-score", type=float, default=0.3, help="Minimum acceptable reCAPTCHA v3 score (2Captcha's minScore task field)")
     p.add_argument("--fingerprint", action="store_true", help="Fetch and apply a 2Captcha Fingerprint API profile's user agent (ignored with --cdp-endpoint — see fingerprint_client.refuse_if_cdp)")
     p.add_argument("--fp-tags", default=None, help="Fingerprint API OS filter — one of Windows, Linux, Android (no browser names, no lists)")
@@ -121,7 +115,7 @@ async def _launch(*, headless: bool, proxy: Optional[Proxy], cdp_endpoint: Optio
     if cdp_endpoint:
         # pyppeteer's connect() has no timeout of its own and never resolves a
         # refused handshake; connect_with_retry bounds each try, retries a
-        # locked profile and names an expired one (CLAUDE.md §26).
+        # locked profile and names an expired one.
         return await scraper_api_client.connect_with_retry(
             lambda: pyppeteer_connect(browserWSEndpoint=cdp_endpoint, defaultViewport=None),
             redact=redact_credentials, log=log,
@@ -336,7 +330,7 @@ def _quiet_target_closed(loop, context) -> None:
     if isinstance(exc, NetworkError) and any(m in str(exc) for m in _CLOSED_TARGET_NOISE):
         return
     # A refused CDP handshake leaves pyppeteer's own connect task failing
-    # after connect_with_retry moved on (CLAUDE.md §26): silence that shape.
+    # after connect_with_retry moved on: silence that shape.
     if exc is not None and type(exc).__name__ in ("InvalidStatusCode", "InvalidStatus", "InvalidHandshake", "AbortHandshake"):
         return
     loop.default_exception_handler(context)
