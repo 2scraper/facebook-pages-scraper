@@ -233,8 +233,9 @@ reports the rest as `not_attempted`. To read more: rotate residential
 exits with `--proxy-file`, and keep `--delay-between-pages` at 2 seconds
 or more.
 
-**A datacentre address has not been measured yet.** The daily canary
-runs from a GitHub runner only when a proxy secret is configured.
+**A datacentre address is what the daily canary measures**: it runs
+from a GitHub runner with no proxy and goes red if facebook.com refuses
+that address or serves no rows.
 
 ## Scraper API mode
 

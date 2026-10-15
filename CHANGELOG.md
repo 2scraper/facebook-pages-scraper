@@ -21,6 +21,13 @@ that changes a default is called out at the top of its entry.
 > (4) `diff_runs.py` exits 2, not 1, when it refuses a comparison, so
 > `--fail-on-change`'s exit 1 means only "something changed".
 
+### Changed
+
+- The canary no longer skips green without a proxy secret: it reads three
+  live Pages from the bare GitHub runner every day and is red on a block,
+  zero rows, a fetch failure or a partial run. `FACEBOOK_PROXY` is used
+  when set, not required.
+
 ### Fixed
 
 - A `FACEBOOK_URL` set in the environment or `.env` no longer replaces a
