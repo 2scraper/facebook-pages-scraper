@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """captcha_solver.py — detection + solving policy. Comments may name a site
 for context; no site-specific selector or URL lives here. Per-site markers
-are passed in by the caller (see BOT_CHALLENGE_MARKERS in product_parser.py)
+are passed in by the caller (see BOT_CHALLENGE_MARKERS in page_parser.py)
 rather than hardcoded, so this module stays reusable across the family.
 
 Policy, matching the family's hard-won rule that "detected != blocking":
@@ -30,10 +30,9 @@ without it. `build_injection_script()` closes that gap using each widget
 type's OWN standard, publicly-documented client-integration convention
 (a hidden `g-recaptcha-response` textarea for reCAPTCHA v2, a
 `cf-turnstile-response` field for Turnstile, and so on) — **not** anything
-confirmed against a real shein.com (or any family site's) actual widget
-markup, which has never been captured for ANY type. It is the same
-"standard convention, explicitly unconfirmed against this site" honesty
-posture `shein_parser.py`'s own DOM fallback selectors use. reCAPTCHA v3
+confirmed against a real site's actual widget
+markup, which has never been captured for ANY type. It is a
+standard convention, explicitly unconfirmed against this site. reCAPTCHA v3
 has no such convention — it's invisible, and the token is typically
 consumed the instant the SITE'S OWN JavaScript resolves
 `grecaptcha.execute()`'s promise (often straight into an XHR, never read
@@ -60,7 +59,7 @@ from typing import Callable, Optional, Sequence
 from scraper_api_client import TwoCaptchaAuthError, TwoCaptchaClient, TwoCaptchaError
 
 # Generic signals any family site might show. A per-site BOT_CHALLENGE_MARKERS
-# list (product_parser.py) is unioned with this, never a replacement for it.
+# list (page_parser.py) is unioned with this, never a replacement for it.
 GENERIC_BOT_CHALLENGE_MARKERS: Sequence[str] = (
     "cf-turnstile", "challenges.cloudflare.com", "cdn-cgi/challenge-platform",
     "g-recaptcha", "recaptcha/api.js", "grecaptcha",
@@ -120,24 +119,19 @@ _RECAPTCHA_EXPLICIT_LOADER_RE = re.compile(r"recaptcha/api\.js\?render=explicit"
 _RECAPTCHA_SITEKEY_ANYWHERE_RE = re.compile(r"\b(6L[\w-]{38})\b")
 _RECAPTCHA_V2_LOADER_RE = re.compile(r"recaptcha/api\.js")
 
-# GeeTest — added 2026-09-21 after shein.com's own risk gateway
-# (captcha_type=909, see shein_parser.BOT_CHALLENGE_MARKERS) correlated
-# with GeeTest via three circumstantial signals documented in
-# shein_parser.py's module docstring (the site's global stylesheet defines
-# .geetest_wind/.geetest_panel on EVERY page, robots.txt disallows
-# /geetest/, and the numeric captcha_type code is consistent with GeeTest's
-# own convention) — NOT a confirmed vendor string the way every other
+# GeeTest — added 2026-09-21 after another site's risk gateway
+# correlated with GeeTest via circumstantial signals only — NOT a
+# confirmed vendor string the way every other
 # CaptchaType below was found (an actual `cf-turnstile`/`g-recaptcha`/
-# `h-captcha` class or loader URL, seen live). No family site, shein.com
-# included, has ever had its actual GeeTest widget markup captured — only
+# `h-captcha` class or loader URL, seen live). No site
+# has ever had its actual GeeTest widget markup captured — only
 # a waiting/redirect shell page, never what renders when a real challenge
 # is actually shown. These two patterns are therefore UNCONFIRMED
 # best-effort, built from GeeTest's own public client-integration
 # documentation (a `data-captcha-id`/`captchaId` attribute for v4; `gt`
 # and `challenge` fields together for v3 — both are 32-character
-# hex-like ids in GeeTest's own docs), not a shein.com-specific fact.
-# `# TODO: verify live` applies here exactly like shein_parser.py's own
-# DOM fallback selectors — update these the moment a real capture exists.
+# hex-like ids in GeeTest's own docs), not a site-specific fact.
+# `# TODO: verify live` — update these the moment a real capture exists.
 _GEETEST_V4_ID_PATTERNS = (
     re.compile(r'data-captcha-id=["\']([a-f0-9]{32})["\']'),
     re.compile(r'captchaId["\']?\s*:\s*["\']([a-f0-9]{32})["\']'),
@@ -267,7 +261,7 @@ def _task_payload(signal: CaptchaSignal, page_url: str, *, proxyless: bool, min_
         # score` is the CLI knob; omitting it would leave 2Captcha's own
         # server-side default in effect, silently, which is the same
         # "documented flag nobody reads" shape this family has shipped
-        # before (CLAUDE.md §17) — so this module always sends one.
+        # before — so this module always sends one.
         task["minScore"] = min_score
     return task
 

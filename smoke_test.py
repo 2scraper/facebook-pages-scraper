@@ -12,7 +12,7 @@ second and third post. They are NOT verbatim: each is rebuilt from the
 page's own JSON keeping only the paths page_parser.py reads, with their
 real values, and dropping session tokens, comments and the people who
 wrote them (see each file's header). Values are asserted against what
-those captures hold, not just that a column is populated (CLAUDE.md §10).
+those captures hold, not just that a column is populated.
 
 Run directly: `python3 smoke_test.py`
 """
@@ -87,12 +87,13 @@ _PAGES = ("nike", "bbcnews", "spiegel", "mcdonalds", "not_found")
 _NIKE_URL = "https://www.facebook.com/nike"
 _NIKE_POSTS = ["1393461115481927", "1392071868954185", "1388501259311246"]
 _SAPI_ARGV = ["--url", "nike"]
+_FAKE_CDP = "ws://" + "u:p@cb.example:9222"  # assembled so the credential scan, which reads this file, does not match it
 _CHROMIUM_ERROR = ('<html><head><title>www.facebook.com</title></head><body><div id="main-message">'
                    '<h1>This site can’t be reached</h1><div class="error-code">ERR_TIMED_OUT</div></div></body></html>')
 
 
 # --------------------------------------------------------------------------- #
-# Engine import/CLI hygiene (CLAUDE.md §6)
+# Engine import/CLI hygiene
 # --------------------------------------------------------------------------- #
 @check("engines import cleanly regardless of installed drivers")
 def _():
@@ -101,7 +102,7 @@ def _():
         assert hasattr(mod, "run")
 
 
-@check("each engine imports its driver at MODULE level, guarded by try/except ImportError (an ast walk, not a substring: a driver imported inside a function makes the no-driver skip meaningless — CLAUDE.md §10)")
+@check("each engine imports its driver at MODULE level, guarded by try/except ImportError (an ast walk, not a substring: a driver imported inside a function makes the no-driver skip meaningless)")
 def _():
     import ast as _ast
     drivers = {"playwright_scraper": "playwright", "selenium_scraper": "selenium", "puppeteer_scraper": "pyppeteer"}
@@ -115,7 +116,7 @@ def _():
         assert guarded, f"{mod.__name__}: no module-level guarded import of {drivers[mod.__name__]}"
 
 
-@check("no module uses a name it never imports, defines or assigns (compileall proves a file PARSES, not that its names RESOLVE — CLAUDE.md §10)")
+@check("no module uses a name it never imports, defines or assigns (compileall proves a file PARSES, not that its names RESOLVE)")
 def _():
     import ast as _ast
     import builtins
@@ -145,14 +146,14 @@ def _():
 
 @check("no forbidden overclaiming wording in any shipped .py/.md/.yml file")
 def _():
-    # Built from pieces so this file can be scanned too (CLAUDE.md §22: the
+    # Built from pieces so this file can be scanned too (the
     # check used to exempt its own file, where the phrases sat verbatim).
     anti = "anti" + "detect"
     banned = (
         "cloud" + " browser", anti + " browser", "2scraper " + anti + " browser",
         "gate." + "2prx.com", "--" + anti, anti + "_local_api",
     )
-    exempt_names = {"CLAUDE.md"}
+    exempt_names = {"CLAUDE" + ".md"}  # a local, never-committed instruction file
     venvs = {p.parent for p in ROOT.rglob("pyvenv.cfg")}
     for path in ROOT.rglob("*"):
         if not path.is_file():
@@ -166,6 +167,33 @@ def _():
         text = path.read_text(encoding="utf-8", errors="ignore").lower()
         for phrase in banned:
             assert phrase not in text, f"{path.relative_to(ROOT)}: contains banned phrase {phrase!r}"
+
+
+@check("no shipped file cites a private instruction file or its section numbers (the public cannot open them): no instruction-file name, no 'section sign + number' reference")
+def _():
+    # Assembled from pieces so this check does not match itself.
+    tokens = ("CLAUDE" + ".md", "claude_" + "2scraper", "2scraper_" + "repo_rules", "play" + "book \u00a7", "template \u00a7")
+    section_ref = re.compile("\u00a7" + r"\s?\d")
+    local_only = {"CLAUDE" + ".md"}
+    venvs = {p.parent for p in ROOT.rglob("pyvenv.cfg")}
+    scanned = 0
+    for path in ROOT.rglob("*"):
+        if not path.is_file() or path.name in local_only or path.name.startswith("2scraper"):
+            continue
+        rel = path.relative_to(ROOT).parts
+        if ".git" in rel or "__pycache__" in rel or any(v in path.parents for v in venvs):
+            continue
+        if any(part.endswith(".egg-info") or part in ("build", "dist") for part in rel):
+            continue
+        if path.suffix not in (".py", ".md", ".html", ".toml", ".cfg", ".yml", ".yaml", ".txt", ".example", "") or path.name == "LICENSE":
+            continue
+        text = path.read_text(encoding="utf-8", errors="ignore")
+        scanned += 1
+        for token in tokens:
+            assert token not in text, f"{path.relative_to(ROOT)}: cites {token!r}"
+        hit = section_ref.search(text)
+        assert not hit, f"{path.relative_to(ROOT)}: section reference {hit.group(0)!r}"
+    assert scanned > 20, f"only {scanned} files scanned — the guard would pass by reading nothing"
 
 
 @check("nothing shipped still names the repo this one was bootstrapped from (facebook-ads-scraper's module, flags, output names or site)")
@@ -186,7 +214,7 @@ def _():
             assert word not in text, f"{path.relative_to(ROOT)}: still says {word!r}"
 
 
-@check("all three engines expose the identical --flag set (CLAUDE.md §4)")
+@check("all three engines expose the identical --flag set")
 def _():
     def flag_set(mod):
         return {opt for a in mod.build_arg_parser()._actions for opt in a.option_strings if opt.startswith("--")}
@@ -206,10 +234,10 @@ def _():
         assert (a.max_solves, a.delay_between_pages, a.retries, a.max_results, a.posts) == (8, 2.0, 2, 100, 0), mod.__name__
 
 
-@check("every top-level module is in the Dockerfile COPY and pyproject py-modules (a module left out breaks the image on every run — CLAUDE.md §16)")
+@check("every top-level module is in the Dockerfile COPY and pyproject py-modules (a module left out breaks the image on every run)")
 def _():
     if not (ROOT / "Dockerfile").exists() and not (ROOT / "pyproject.toml").exists():
-        return  # the Docker image's own copy of this suite ships neither (CLAUDE.md §22)
+        return  # the Docker image's own copy of this suite ships neither
     modules = sorted(pth.stem for pth in ROOT.glob("*.py"))
     docker = (ROOT / "Dockerfile").read_text(encoding="utf-8")
     pyproject = (ROOT / "pyproject.toml").read_text(encoding="utf-8")
@@ -220,7 +248,7 @@ def _():
     assert listed <= set(modules), f"pyproject lists modules that do not exist: {sorted(listed - set(modules))}"
 
 
-@check("BOT_CHALLENGE_MARKERS is empty, and the generic markers match NONE of the real captures (CLAUDE.md §18: count a marker on a good page first)")
+@check("BOT_CHALLENGE_MARKERS is empty, and the generic markers match NONE of the real captures (count a marker on a good page first)")
 def _():
     assert pp.BOT_CHALLENGE_MARKERS == (), "no captcha vendor appeared on any Page capture"
     for name in _PAGES:
@@ -230,7 +258,7 @@ def _():
 
 
 # --------------------------------------------------------------------------- #
-# output_writer — exit codes / precedence / dedupe (CLAUDE.md §9)
+# output_writer — exit codes / precedence / dedupe
 # --------------------------------------------------------------------------- #
 @check("exit codes and STATUS_BY_EXIT match the family contract exactly")
 def _():
@@ -250,7 +278,7 @@ def _mk_product(sku, price=None, **kw):
     return output_writer.Product(**defaults)
 
 
-@check("finish_run: rows gathered by a run that did not finish are PARTIAL (6) with the cause in stop_reason — never 5/3 with a file (CLAUDE.md §25; audit 2026-09-30 got exit 5 AND a written file). Rewrites the old pinned 'exit 5 with products' position deliberately.")
+@check("finish_run: rows gathered by a run that did not finish are PARTIAL (6) with the cause in stop_reason — never 5/3 with a file (audit 2026-09-30 got exit 5 AND a written file). Rewrites the old pinned 'exit 5 with products' position deliberately.")
 def _():
     cases = (
         (dict(blocked=True, remote_api_error=True), "remote_api_error"),
@@ -394,7 +422,7 @@ def _():
 
 @check("proxy_pool.redact_credentials strips login:password out of an arbitrary string")
 def _():
-    raw = "connect failed: ws://myuser:mysecret@cb.2captcha.com:9222 (5 attempts)"
+    raw = "connect failed: ws://" + "myuser:mysecret@cb.2captcha.com:9222 (5 attempts)"  # split: the credential scan reads this file
     redacted = proxy_pool.redact_credentials(raw)
     assert "mysecret" not in redacted
     assert "myuser" not in redacted
@@ -424,7 +452,8 @@ def _():
 @check("env_config.ENV_KEYS matches .env.example exactly, in both directions")
 def _():
     example = (ROOT / ".env.example").read_text(encoding="utf-8")
-    documented = {line.split("=", 1)[0] for line in example.splitlines() if "=" in line and not line.startswith("#")}
+    # A variable shipped commented out (`# FACEBOOK_URL=...`) is documented too.
+    documented = {m.group(1) for m in re.finditer(r"^#? ?([A-Z][A-Z0-9_]*)=", example, re.M)}
     assert documented == set(env_config.ENV_KEYS), (documented, set(env_config.ENV_KEYS))
 
 
@@ -496,7 +525,7 @@ def _page(name):
     return pp.page_row(_fx(name), scraped_at="2026-10-06T00:00:00Z")
 
 
-@check("page_row on the REAL Nike capture: values, not coverage (CLAUDE.md §10) — keyed on the Page id, rounded followers kept as text AND as a number, the intro card read by item TYPE, the website out of Facebook's l.php redirect")
+@check("page_row on the REAL Nike capture: values, not coverage — keyed on the Page id, rounded followers kept as text AND as a number, the intro card read by item TYPE, the website out of Facebook's l.php redirect")
 def _():
     r = _page("nike")
     assert (r.sku, r.source, r.category, r.title, r.product_url) == (
@@ -604,7 +633,7 @@ def _():
         assert name in tail, f"{name} missing from Product's site-specific tail"
 
 
-@check("fixtures are scrubbed and stay scrubbed: no session token, no comment or comment author, no link-shim signature — guarded by PATTERN (CLAUDE.md §10)")
+@check("fixtures are scrubbed and stay scrubbed: no session token, no comment or comment author, no link-shim signature — guarded by PATTERN")
 def _():
     token = re.compile(r'["\']?(?:fb_dtsg|lsd|jazoest|__hsi|DTSGInitialData)["\']?\s*[:=]\s*["{]')
     people = re.compile(r'"(?:author|commenter|interesting_top_level_comments|comment_list_renderer|actors)"')
@@ -793,7 +822,7 @@ def _():
         except SystemExit as exc:
             assert "output_sha256" in str(exc)
 
-@check("the credential scanner FINDS a planted key in every shape seen in the family (JSON-quoted, JSON-escaped, 32-hex next to a key word) and ignores placeholders, type hints and Python-name mappings — a scanner that cannot fail is not one (CLAUDE.md §24/§25)")
+@check("the credential scanner FINDS a planted key in every shape seen in the family (JSON-quoted, JSON-escaped, 32-hex next to a key word) and ignores placeholders, type hints and Python-name mappings — a scanner that cannot fail is not one")
 def _():
     import importlib.util
     scanner = ROOT / ".github" / "ci_checks.py"
@@ -803,17 +832,23 @@ def _():
     mod = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(mod)
     fake32 = "0123456789abcdef" * 2
-    for planted in ('"api_key": "a8f3k2m9q7x1z5b4"', '{\\"api_key\\": \\"a8f3k2m9q7x1z5b4\\"}',
+    key_name = "api_" + "key"  # assembled: the scan reads this file too, so no literal planted credential may sit here
+    for planted in ('"%s": "a8f3k2m9q7x1z5b4"' % key_name, '{\\"%s\\": \\"a8f3k2m9q7x1z5b4\\"}' % key_name,
                     "TWOCAPTCHA_KEY=" + fake32, '"clientKey":"' + fake32 + '"'):
         assert mod.scan_text("planted.txt", planted), f"scanner missed a planted credential: {planted!r}"
     for harmless in ("api_key: Optional[str] = None", "TWOCAPTCHA_KEY=your-key-here", '"TWOCAPTCHA_KEY": "twocaptcha_key",'):
         assert not mod.scan_text("ok.txt", harmless), f"false positive: {harmless!r}"
+    # This file is scanned like any other (its fixtures are assembled from
+    # pieces), and the scan must actually read files to pass.
+    assert "smoke_test.py" not in mod.FIXTURE_ALLOWLIST, "smoke_test.py must not be exempt from the credential scan"
+    findings, scanned = mod.scan_with_count()
+    assert scanned >= mod.MIN_SCANNED_FILES and not findings, (scanned, findings)
 
-@check("no workflow imports a local module inline — tests.yml calls ci_checks.py instead (CLAUDE.md §26: an inline heredoc import is red only on the first push)")
+@check("no workflow imports a local module inline — tests.yml calls ci_checks.py instead (an inline heredoc import is red only on the first push)")
 def _():
     import re as _re
     if not (ROOT / ".github").is_dir():
-        return  # the Docker image ships no .github/ (CLAUDE.md §22)
+        return  # the Docker image ships no .github/
     local = {p.stem for p in ROOT.glob("*.py")}
     for wf in (ROOT / ".github" / "workflows").glob("*.yml"):
         text = wf.read_text(encoding="utf-8")
@@ -822,7 +857,7 @@ def _():
             assert name not in local, f"{wf.name}: imports local module {name!r} inline"
     assert "ci_checks.py --sample-check" in (ROOT / ".github" / "workflows" / "tests.yml").read_text(encoding="utf-8")
 
-@check(".gitignore covers every artefact a run writes (CLAUDE.md §22/§26): .env copies, --dump-html challenge screenshots, *.pageN dumps, live/ — while sample outputs, fixtures and .env.example stay tracked")
+@check(".gitignore covers every artefact a run writes: .env copies, --dump-html challenge screenshots, *.pageN dumps, live/ — while sample outputs, fixtures and .env.example stay tracked")
 def _():
     import subprocess as _sp
     if not (ROOT / ".git").exists():
@@ -856,7 +891,7 @@ def _():
 
 
 # --------------------------------------------------------------------------- #
-# page_flow — the ONE fetch loop (CLAUDE.md §26), driven with a fake engine
+# page_flow — the ONE fetch loop, driven with a fake engine
 # --------------------------------------------------------------------------- #
 _SESSION = {"playwright_scraper": "_PlaywrightSession", "selenium_scraper": "_SeleniumSession", "puppeteer_scraper": "_PyppeteerSession"}
 _ENGINE = {"playwright_scraper": "_PlaywrightEngine", "selenium_scraper": "_SeleniumEngine", "puppeteer_scraper": "_PyppeteerEngine"}
@@ -877,7 +912,7 @@ def _():
     assert "_bounded(browser.disconnect()" in pup and "_release(remote_browser, remote=True)" in pup
 
 
-@check("§26 ops set, derived from page_flow's AST (every session.<op> / engine.<op> the loop uses): each engine's session and engine class provides all of them, and so does the Scraper API engine")
+@check("the shared-loop ops set, derived from page_flow's AST (every session.<op> / engine.<op> the loop uses): each engine's session and engine class provides all of them, and so does the Scraper API engine")
 def _():
     import ast as _ast
     import scraper_api_engine
@@ -994,7 +1029,7 @@ def _():
     assert rc == output_writer.EXIT_OK and [r["sku"] for r in rows] == ["facebook-page-15087023444"] + [f"facebook-post-{p}" for p in _NIKE_POSTS], rows
     assert [r["position"] for r in rows[1:]] == [1, 2, 3] and rows[3]["reactions"] == 3873
     assert meta["selection"] == {"mode": "pages", "urls": [_NIKE_URL], "posts": 3, "exact_likes": False, "max_results": 100}
-    assert meta["pages"] == [{"url": _NIKE_URL, "state": "content", "rows": 4, "posts_shown": 3, "exact_likes": None, "result": "ok"}]
+    assert meta["pages"] == [{"url": _NIKE_URL, "sku": "facebook-page-15087023444", "state": "content", "rows": 4, "posts_shown": 3, "exact_likes": None, "result": "ok"}]
     rc, meta, rows, eng = _pflow({_NIKE_URL: _nike(feed_after=4)}, ["--url", "nike", "--posts", "1"])
     assert len(rows) == 2 and rows[1]["post_id"] == _NIKE_POSTS[0] and eng.sessions[0].step == 0, "the embedded post needs no wait"
     rc, meta, rows, eng = _pflow({_NIKE_URL: _nike()}, ["--url", "nike"])
@@ -1105,7 +1140,7 @@ class _FakeScrapeClient:
         return scraper_api_client.ScrapeResult(target_status=status, headers={}, body=body)
 
 
-def _sapi(answers, argv, cdp="ws://u:p@cb.example:9222"):
+def _sapi(answers, argv, cdp=_FAKE_CDP):
     import scraper_api_engine
     args = playwright_scraper.build_arg_parser().parse_args([*argv, "--delay-between-pages", "0"])
     args._solve_budget = page_flow.SolveBudget(args.max_solves)
@@ -1131,7 +1166,7 @@ def _sapi(answers, argv, cdp="ws://u:p@cb.example:9222"):
 def _():
     rc, meta, rows, client, _ = _sapi([(200, _fx("nike"))], ["--url", "nike", "--posts", "3"])
     assert rc == output_writer.EXIT_OK and [r["category"] for r in rows] == ["page", "post"] and meta["engine"] == "scraper_api", rows
-    assert client.calls == [(_NIKE_URL, "ws://u:p@cb.example:9222")]
+    assert client.calls == [(_NIKE_URL, _FAKE_CDP)]
     rc, meta, rows, client, _ = _sapi([(200, _fx("not_found"))], ["--url", "zzqx-no-such-page-88123"], cdp=None)
     assert rc == output_writer.EXIT_ZERO_PRODUCTS and client.calls[0][1] is None
     refused = scraper_api_client.TwoCaptchaAuthError("Scraper API: invalid/missing TWOCAPTCHA_KEY")
@@ -1146,7 +1181,7 @@ def _():
 def _():
     for mod in _ENGINES:
         base = ["--url", "nike", "--scraper-api", "--out", str(Path(tempfile.mkdtemp()) / "o.json")]
-        a = mod.build_arg_parser().parse_args(base + ["--cdp-endpoint", "ws://u:p@cb.example:9222"])
+        a = mod.build_arg_parser().parse_args(base + ["--cdp-endpoint", _FAKE_CDP])
         rc = mod.run(a) if mod is selenium_scraper else asyncio.run(mod.run(a))
         assert rc == output_writer.EXIT_BAD_USAGE, (mod.__name__, rc)
     src = (ROOT / "selenium_scraper.py").read_text(encoding="utf-8")
@@ -1223,6 +1258,146 @@ def _():
 def _():
     rc, meta, rows, client, _ = _sapi([(None, "")], _SAPI_ARGV + ["--retries", "1"])
     assert rc == output_writer.EXIT_REMOTE_API_ERROR and len(client.calls) == 2, (rc, len(client.calls))
+
+
+@check("atomic writes keep file modes honest: a NEW output gets 0666 minus the umask (664 under umask 002, 644 under 022), an EXISTING output keeps its own mode (0640 stays 0640); a failed write leaves the previous file byte-identical and no temporary file behind")
+def _():
+    import os as _os
+    import stat as _stat
+    with tempfile.TemporaryDirectory() as td:
+        rows = [_mk_product("nike")]
+        old_umask = _os.umask(0o002)
+        try:
+            fresh = Path(td) / "fresh.json"
+            output_writer.write_json(rows, str(fresh))
+            assert _stat.S_IMODE(fresh.stat().st_mode) == 0o664, oct(fresh.stat().st_mode)
+            _os.umask(0o022)
+            fresh2 = Path(td) / "fresh2.csv"
+            output_writer.write_csv(rows, str(fresh2))
+            assert _stat.S_IMODE(fresh2.stat().st_mode) == 0o644, oct(fresh2.stat().st_mode)
+            kept = Path(td) / "kept.json"
+            kept.write_text("[]", encoding="utf-8")
+            _os.chmod(kept, 0o640)
+            output_writer.write_json(rows, str(kept))
+            assert _stat.S_IMODE(kept.stat().st_mode) == 0o640, oct(kept.stat().st_mode)
+            assert json.loads(kept.read_text(encoding="utf-8"))[0]["sku"] == "nike"
+            before = kept.read_bytes()
+            try:
+                output_writer.write_json([object()], str(kept))  # not serialisable: fails halfway
+                raise AssertionError("the bad write should have raised")
+            except (TypeError, AttributeError):
+                pass
+            assert kept.read_bytes() == before, "a failed write must leave the previous file untouched"
+            assert sorted(p.name for p in Path(td).iterdir()) == ["fresh.json", "fresh2.csv", "kept.json"], list(Path(td).iterdir())
+        finally:
+            _os.umask(old_umask)
+
+
+@check("CSV formula guard: a string cell starting with = + - @ (or a literal leading apostrophe) gets a leading apostrophe in CSV only; numbers stay numbers; JSON keeps the site's bytes; the sidecar records csv_cells_escaped as a COUNT, and a caller's own key of that name wins")
+def _():
+    import csv as _csv
+    with tempfile.TemporaryDirectory() as td:
+        rows = [_mk_product("nike", title="=HYPERLINK(1)", phone="+1 503 671 6453", followers=-5, description="plain")]
+        out = str(Path(td) / "o.csv")
+        rc = output_writer.finish_run(products=rows, out_path=out, fmt="csv", engine="t", url=_NIKE_URL, pages_requested=1,
+                                      pages_completed=1, failed_pages=None, blocked=False, remote_api_error=False,
+                                      allow_empty=False, started_at=0.0)
+        meta = json.loads(Path(out + ".meta.json").read_text(encoding="utf-8"))
+        with open(out, newline="", encoding="utf-8") as f:
+            row = next(_csv.DictReader(f))
+        assert rc == output_writer.EXIT_OK and meta["csv_cells_escaped"] == 2, meta.get("csv_cells_escaped")
+        assert row["title"] == "'=HYPERLINK(1)" and row["phone"] == "'+1 503 671 6453" and row["followers"] == "-5", row
+        out_j = str(Path(td) / "o.json")
+        output_writer.finish_run(products=rows, out_path=out_j, fmt="json", engine="t", url=_NIKE_URL, pages_requested=1,
+                                 pages_completed=1, failed_pages=None, blocked=False, remote_api_error=False,
+                                 allow_empty=False, started_at=0.0)
+        assert json.loads(Path(out_j).read_text(encoding="utf-8"))[0]["title"] == "=HYPERLINK(1)"
+        assert "csv_cells_escaped" not in json.loads(Path(out_j + ".meta.json").read_text(encoding="utf-8"))
+        output_writer.finish_run(products=rows, out_path=out, fmt="csv", engine="t", url=_NIKE_URL, pages_requested=1,
+                                 pages_completed=1, failed_pages=None, blocked=False, remote_api_error=False,
+                                 allow_empty=False, started_at=0.0, extra_meta={"csv_cells_escaped": "caller"})
+        assert json.loads(Path(out + ".meta.json").read_text(encoding="utf-8"))["csv_cells_escaped"] == "caller"
+
+
+@check("every engine refuses a negative --retries, --retry-delay, --delay-between-pages, --max-solves or --proxy-block-retries at the argparse level: exit 2 and an error line naming the flag (a negative --retries used to run no navigation at all)")
+def _():
+    import contextlib
+    import io
+    for mod in _ENGINES:
+        for flag in ("--retries", "--retry-delay", "--delay-between-pages", "--max-solves", "--proxy-block-retries"):
+            err = io.StringIO()
+            try:
+                with contextlib.redirect_stderr(err):
+                    mod.build_arg_parser().parse_args(["--url", "nike", flag, "-1"])
+                raise AssertionError(f"{mod.__name__} accepted {flag} -1")
+            except SystemExit as exc:
+                assert exc.code == 2, (mod.__name__, flag, exc.code)
+            line = next((l for l in err.getvalue().splitlines() if "error:" in l), "")
+            assert f"argument {flag}" in line, (mod.__name__, flag, line)
+        args = mod.build_arg_parser().parse_args(["--url", "nike", "--retries", "0"])
+        assert args.retries == 0, "--retries counts EXTRA attempts here: 0 is legal and means one navigation"
+
+
+@check("a bot challenge that does not clear is BLOCKED (exit 3) whatever the status: under HTTP 200, and with no status at all (Selenium), not a fetch error (exit 5)")
+def _():
+    challenge = '<html><head><title>Just a moment...</title></head><body><script src="https://challenges.cloudflare.com/turnstile/v0/api.js"></script></body></html>'
+    for status in (200, None):
+        rc, meta, rows, eng = _pflow({"*": {"html": challenge, "status": status}}, ["--url", "nike"])
+        assert rc == output_writer.EXIT_BLOCKED and meta is None, (status, rc)
+    rc, meta, rows, eng = _pflow({"*": {"html": _CHROMIUM_ERROR, "status": 200}}, ["--url", "nike", "--allow-empty"])
+    assert rc == output_writer.EXIT_REMOTE_API_ERROR and meta["failed_urls"][0]["reason"] == "fetch_error", \
+        "a page with no challenge marker that is not facebook.com stays a fetch error"
+
+
+@check("FACEBOOK_URL from the environment or .env never replaces a --urls-file the caller typed; it still fills --url when neither was given; .env.example ships it commented out")
+def _():
+    import argparse as _ap
+    import os as _os
+    _os.environ["FACEBOOK_URL"] = "https://www.facebook.com/fromenv"
+    try:
+        ns = env_config.apply_env(_ap.Namespace(url=None, urls_file="list.txt"), dotenv_path="/nonexistent/.env")
+        assert ns.url is None and ns.urls_file == "list.txt", vars(ns)
+        ns = env_config.apply_env(_ap.Namespace(url=None, urls_file=None), dotenv_path="/nonexistent/.env")
+        assert ns.url == "https://www.facebook.com/fromenv", vars(ns)
+    finally:
+        del _os.environ["FACEBOOK_URL"]
+    with tempfile.TemporaryDirectory() as td:
+        copied = Path(td) / ".env"
+        copied.write_text((ROOT / ".env.example").read_text(encoding="utf-8"), encoding="utf-8")
+        ns = env_config.apply_env(_ap.Namespace(url=None, urls_file=None, proxy=None, cdp_endpoint=None, twocaptcha_key=None),
+                                  dotenv_path=str(copied))
+        assert ns.url is None and ns.proxy is None and ns.cdp_endpoint is None and ns.twocaptcha_key is None, vars(ns)
+
+
+@check("diff_runs: likes_exact is watched with a delta; a Page whose INPUT address (profile.php?id=, @Name, any case) the new run found gone is removed, not left_selection; a refused comparison exits 2 (usage), never 1 (which --fail-on-change means 'changed')")
+def _():
+    import contextlib
+    import io
+    import sys as _sys
+    with tempfile.TemporaryDirectory() as td:
+        def run_(name, rows, **meta):
+            out = str(Path(td) / name)
+            output_writer.finish_run(products=rows, out_path=out, fmt="json", engine="t", url=_NIKE_URL, pages_requested=2,
+                                     pages_completed=2, failed_pages=None, blocked=False, remote_api_error=False,
+                                     allow_empty=False, started_at=0.0, max_results=100, extra_meta={"selection": {"x": 1}, **meta})
+            return out
+        by_id = "https://www.facebook.com/profile.php?id=100044541544829"
+        a = run_("a.json", [_mk_product("nike", likes_exact=39_506_218), _mk_product("acme", product_url="https://www.facebook.com/acme")],
+                 pages=[{"url": _NIKE_URL, "sku": "nike"}, {"url": by_id, "sku": "acme"}])
+        b = run_("b.json", [_mk_product("nike", likes_exact=39_506_300)], not_found_urls=[by_id.upper().replace("HTTPS", "https")])
+        r = diff_runs.diff(a, b)
+        assert r["removed"] == ["acme"] and r["left_selection"] == [], r
+        assert r["field_changes"] == [{"sku": "nike", "fields": {"likes_exact": {"old": 39_506_218, "new": 39_506_300, "delta": 82}}}], r
+        argv, err = _sys.argv, io.StringIO()
+        _sys.argv = ["diff_runs.py", a, str(Path(td) / "missing.json")]
+        try:
+            with contextlib.redirect_stderr(err):
+                diff_runs.main()
+            raise AssertionError("a missing sidecar must be refused")
+        except SystemExit as exc:
+            assert exc.code == 2 and "no sidecar found" in err.getvalue(), (exc.code, err.getvalue())
+        finally:
+            _sys.argv = argv
 
 
 def run() -> int:

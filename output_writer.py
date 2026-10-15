@@ -2,11 +2,7 @@
 """output_writer.py — the row model, JSON/CSV writer, dedupe, exit codes,
 and run metadata. Carries (almost) no site knowledge: everything here is
 part of the family's shared output CONTRACT — diverging from it needs a
-written reason, not a per-site tweak. Ported near-verbatim from
-lidl-scraper's output_writer.py (CLAUDE.md §7: porting starts by copying
-the family-shared modules from the newest sibling and diffing what
-changed on purpose) — in turn ported from skyscanner-scraper's, in turn
-from stockx-scraper's original (commit 00b5570). The exit codes,
+written reason, not a per-site tweak. The exit codes,
 STATUS_BY_EXIT map, and finish_run() outcome-precedence logic are
 IDENTICAL to every prior family member on purpose, including the fix
 from a 2026-09-15 audit that found `blocked`/`remote_api_error` were
@@ -20,6 +16,7 @@ import csv
 import hashlib
 import json
 import os
+import stat
 import tempfile
 import time
 from contextlib import contextmanager
@@ -187,8 +184,25 @@ def csv_text(value):
     return value
 
 
+def _target_mode(target: Path) -> int:
+    """The mode the finished file gets: an existing output keeps its own
+    mode (a file someone chmod-ed 0640 stays 0640), a new one gets what a
+    plain open() would have given it (0666 minus the umask)."""
+    try:
+        return stat.S_IMODE(os.stat(target).st_mode)
+    except FileNotFoundError:
+        umask = os.umask(0)
+        os.umask(umask)
+        return 0o666 & ~umask
+
+
 @contextmanager
 def _atomic_text(out_path, *, newline=None):
+    """Write to a temporary file in the target's own directory, fsync it,
+    then os.replace() it over the target: a crash, a kill or a full disk
+    halfway through leaves the previous file untouched, never a truncated
+    one. mkstemp creates the temporary file 0600, so the mode is set
+    explicitly before the rename."""
     target = Path(out_path)
     fd, temporary = tempfile.mkstemp(prefix="." + target.name + ".", suffix=".tmp", dir=target.parent)
     try:
@@ -196,38 +210,43 @@ def _atomic_text(out_path, *, newline=None):
             yield stream
             stream.flush()
             os.fsync(stream.fileno())
-        # mkstemp creates the file 0600; an output file gets the permissions a
-        # plain open() would have given it (0666 minus the umask), so a run
-        # into a shared or mounted directory stays readable as before.
-        umask = os.umask(0)
-        os.umask(umask)
-        os.chmod(temporary, 0o666 & ~umask)
+        os.chmod(temporary, _target_mode(target))
         os.replace(temporary, target)
     finally:
         if os.path.exists(temporary):
             os.unlink(temporary)
 
 
-def write_json(products: Sequence[Product], out_path: str) -> None:
+def write_json(products: Sequence[Product], out_path: str) -> int:
     with _atomic_text(out_path) as f:
         json.dump([asdict(p) for p in products], f, ensure_ascii=False, indent=2)
+    return 0
 
 
-def write_csv(products: Sequence[Product], out_path: str) -> None:
+def write_csv(products: Sequence[Product], out_path: str) -> int:
+    """Returns how many cells csv_text() changed (recorded in the sidecar
+    as csv_cells_escaped, so the difference from the JSON is declared)."""
+    escaped = 0
     with _atomic_text(out_path, newline="") as f:
         writer = csv.DictWriter(f, fieldnames=PRODUCT_FIELD_NAMES)
         writer.writeheader()  # written even for zero rows — a consumer reads
         for p in products:    # an empty table, not a zero-byte file.
-            writer.writerow({name: csv_text(value) for name, value in asdict(p).items()})
+            row = {}
+            for name, value in asdict(p).items():
+                cell = csv_text(value)
+                escaped += cell is not value
+                row[name] = cell
+            writer.writerow(row)
+    return escaped
 
 
-def write_output(products: Sequence[Product], out_path: str, fmt: str) -> None:
+def write_output(products: Sequence[Product], out_path: str, fmt: str) -> int:
+    """Writes the rows; returns the number of CSV cells escaped (0 for JSON)."""
     if fmt == "json":
-        write_json(products, out_path)
-    elif fmt == "csv":
-        write_csv(products, out_path)
-    else:
-        raise ValueError(f"Unsupported format: {fmt!r} (expected 'json' or 'csv')")
+        return write_json(products, out_path)
+    if fmt == "csv":
+        return write_csv(products, out_path)
+    raise ValueError(f"Unsupported format: {fmt!r} (expected 'json' or 'csv')")
 
 
 # --------------------------------------------------------------------------- #
@@ -276,9 +295,7 @@ def write_meta(
 # finish_run — the single place every engine calls to decide exit code,
 # whether to write output at all, and whether to write a sidecar. Keeping
 # this in one shared function is what stops the three engines' exit-code
-# mapping from drifting apart. Structurally identical to stockx-scraper's
-# post-audit-fix finish_run() (commit 00b5570) — see that file's comment
-# for the full incident writeup this precedence order fixes.
+# mapping from drifting apart.
 # --------------------------------------------------------------------------- #
 def finish_run(
     *,
@@ -320,7 +337,7 @@ def finish_run(
     # blocked partway through.
     #
     # Rows gathered by a run that did NOT finish cleanly are `partial` (6),
-    # with the cause in `stop_reason` (CLAUDE.md §25: exit 5 and exit 3
+    # with the cause in `stop_reason` (exit 5 and exit 3
     # promise no file; 6 means "some rows, incomplete"). Audit 2026-09-30:
     # this used to return 5 or 3 AND write the rows, so a consumer keyed on
     # the exit code threw away good data. `rejected_rows` counts records
@@ -338,7 +355,7 @@ def finish_run(
                        or ("failed_pages" if failed_pages and not blocked and not remote_api_error else status))
     elif remote_api_error or blocked or partial or rejected_rows:
         status, exit_code = "partial", EXIT_PARTIAL
-        # A throttle is not a block (CLAUDE.md §24): "blocked" sends the
+        # A throttle is not a block: "blocked" sends the
         # reader to buy a proxy, "rate_limited" to slow down.
         stop_reason = ("remote_api_error" if remote_api_error else "rate_limited" if rate_limited and blocked
                        else "blocked" if blocked else incomplete_reason or ("failed_pages" if partial else "rejected_rows"))
@@ -358,10 +375,12 @@ def finish_run(
     if zero_products and not allow_empty:
         return exit_code
 
-    write_output(products, out_path, fmt)
+    escaped = write_output(products, out_path, fmt)
     extra = dict(extra_meta or {})
     if fmt == "csv":
-        extra["csv_text_encoding"] = CSV_TEXT_ENCODING
+        # Housekeeping goes UNDER the caller's keys, never over them.
+        extra.setdefault("csv_text_encoding", CSV_TEXT_ENCODING)
+        extra.setdefault("csv_cells_escaped", escaped)
     if rejected_rows:
         extra["rejected_rows"] = rejected_rows
     # What diff_runs needs to refuse a meaningless comparison: the cap the

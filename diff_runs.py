@@ -39,11 +39,11 @@ from urllib.parse import parse_qsl, urlencode, urlparse
 # Followers are ROUNDED by the site ("39M"), so a change there is a change
 # of the displayed figure, not a precise delta; it is still the number a
 # visitor sees. Post counts (reactions, comments, shares, views) are exact.
-MONITOR_FIELDS = ("title", "page_category", "description", "is_verified", "followers", "following", "likes",
+MONITOR_FIELDS = ("title", "page_category", "description", "is_verified", "followers", "following", "likes", "likes_exact",
                   "website", "phone", "email", "address", "hours", "price_range", "recommend_pct",
                   "review_count", "owner", "reactions", "comments", "shares", "video_views", "text")
 EXTRA_FIELDS = ("followers_text", "other_accounts_json", "cover_url", "image_url")
-NUMERIC_FIELDS = {"followers", "following", "likes", "recommend_pct", "review_count", "reactions", "comments",
+NUMERIC_FIELDS = {"followers", "following", "likes", "likes_exact", "recommend_pct", "review_count", "reactions", "comments",
                   "shares", "video_views"}
 BOOL_FIELDS = {"is_verified"}
 
@@ -100,6 +100,10 @@ def normalize_scope(url: str) -> str:
     return f"{parts.netloc.lower()}{parts.path.rstrip('/')}?{query}"
 
 
+def _url_key(url: str) -> str:
+    return (url or "").strip().rstrip("/").lower()
+
+
 def diff(old_path: str, new_path: str, *, allow_different_scope: bool = False, fields=None) -> dict:
     fields = list(MONITOR_FIELDS if fields is None else fields)
     if any(name not in MONITOR_FIELDS + EXTRA_FIELDS for name in fields):
@@ -139,9 +143,22 @@ def diff(old_path: str, new_path: str, *, allow_different_scope: bool = False, f
     # the three a Page shows; only a Page (or a post of a Page) whose ADDRESS
     # the new run found gone is really removed. In a capped run (more Pages
     # than --max-results) a missing Page may only have been left out.
-    gone = set(new_meta.get("not_found_urls") or [])
-    removed = [sku for sku in missing if old_rows[sku].get("category") == "page" and not capped
-               and old_rows[sku].get("product_url") in gone]
+    #
+    # `not_found_urls` holds the INPUT addresses the new run asked for, which
+    # need not be the Page's canonical product_url (a profile.php?id=… or an
+    # @Name input). The old sidecar's `pages` maps each input address to the
+    # Page it led to, so both are checked, case-insensitively.
+    gone = {_url_key(u) for u in (new_meta.get("not_found_urls") or [])}
+    old_inputs: Dict[str, set] = {}
+    for entry in old_meta.get("pages") or []:
+        if isinstance(entry, dict) and entry.get("sku") and entry.get("url"):
+            old_inputs.setdefault(entry["sku"], set()).add(_url_key(entry["url"]))
+
+    def _address_gone(sku: str) -> bool:
+        addresses = {_url_key(old_rows[sku].get("product_url") or "")} | old_inputs.get(sku, set())
+        return bool(addresses & gone)
+
+    removed = [sku for sku in missing if old_rows[sku].get("category") == "page" and not capped and _address_gone(sku)]
     left_selection = [sku for sku in missing if sku not in removed]
     changed, source_changed, currency_changed, field_changes = [], [], [], []
 
@@ -196,7 +213,16 @@ def main() -> int:
     if fields and any(name not in MONITOR_FIELDS + EXTRA_FIELDS for name in fields):
         p.error("Unknown --fields value; choose from " + ",".join(MONITOR_FIELDS + EXTRA_FIELDS))
 
-    result = diff(args.old_run, args.new_run, allow_different_scope=args.allow_different_scope, fields=fields)
+    try:
+        result = diff(args.old_run, args.new_run, allow_different_scope=args.allow_different_scope, fields=fields)
+    except SystemExit as exc:
+        # A refused comparison (missing sidecar, a run that did not complete,
+        # different selections) is a usage error: exit 2, never 1, which
+        # --fail-on-change uses for "something changed".
+        if isinstance(exc.code, str):
+            message = exc.code[len("error: "):] if exc.code.startswith("error: ") else exc.code
+            p.error(message)
+        raise
 
     if args.json:
         print(json.dumps(result, ensure_ascii=False, indent=2))

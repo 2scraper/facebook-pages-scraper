@@ -74,9 +74,9 @@ class CaptchaTask:
 @dataclass
 class ScrapeResult:
     """One Scraper API `/tasks/sync` response. `target_status` is the
-    TARGET page's own HTTP status (shein.com's, not 2Captcha's) — shein's
-    own risk gateway answers with 200 for a challenge page exactly like it
-    does for a real one (see shein_parser.py), so a caller still has to run
+    TARGET page's own HTTP status (the site's, not 2Captcha's) — a risk
+    gateway can answer with 200 for a challenge page exactly like it does
+    for a real one, so a caller still has to run
     the same `detect_from_html(body, ...)` marker check as the browser
     engines do; `target_status` alone does not tell blocked apart from ok."""
     target_status: Optional[int]
@@ -85,7 +85,7 @@ class ScrapeResult:
 
 
 # --------------------------------------------------------------------------- #
-# Scraping Browser API connect policy — CLAUDE.md §26, measured on a sibling
+# Scraping Browser API connect policy, measured on a sibling
 # repo: a profile stays `profile_locked` for ~1.6-1.9s after a clean
 # disconnect (HTTP 500 to an immediate reconnect), pyppeteer's connect()
 # never resolves on a refused handshake, and a 401 means the endpoint's
@@ -144,8 +144,8 @@ class TwoCaptchaClient:
         self.timeout = timeout
         # `--captcha-api` (testing only): override the base URL so a smoke
         # test or a local run can point this at a mock server instead of
-        # the real https://api.2captcha.com. CLAUDE.md §17 names the exact
-        # failure mode this guards against — a CLI flag defined on the
+        # the real https://api.2captcha.com. This guards against a known
+        # failure mode — a CLI flag defined on the
         # parser but never read by anything is "a documented feature not
         # working at all", found live in this family more than once.
         # `self.api_base` (an instance attribute, never the module-level
@@ -321,8 +321,7 @@ class TwoCaptchaClient:
         # Unlike createTask/getTaskResult/getBalance above, this endpoint
         # takes its key as a URL query parameter (`?key=...`), not a JSON
         # body — and `requests` puts the FULL URL, query string included,
-        # into the text of every HTTPError and connection error (CLAUDE.md
-        # §8 names this exact endpoint). Redact before raising, and drop
+        # into the text of every HTTPError and connection error. Redact before raising, and drop
         # the original exception from the chain (`from None`) so its own
         # unredacted text can't surface via "the above exception was the
         # direct cause of…".

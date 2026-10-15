@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """page_flow.py — what one Facebook Page address MEANS, decided once for
-all engines (CLAUDE.md §1: three copies of this triage would drift, and the
+all engines (three copies of this triage would drift, and the
 drift would be silent — one engine reporting exit 3 where its twin reports
 0 on the same page).
 
@@ -9,13 +9,15 @@ seen live on 2026-10-06 (see page_parser.py):
 
   1. the Page, under HTTP 200 with a login dialog drawn over it → `content`;
   2. the Page route with no header yet → `loading`: WAIT, bounded, never
-     retry (a retry re-rolls a page that was about to paint — CLAUDE.md §18);
+     retry (a retry re-rolls a page that was about to paint);
   3. "This content isn't available right now" (`CometErrorRoute`, also
      HTTP 200) → `not_found`: a complete answer about that address, no
      row, never retried and never called a block;
   4. a login or checkpoint page → `blocked` (not seen on Pages; handled so
      that it cannot pass as "not found");
-  5. anything else (Chromium's own error page, an interstitial) →
+  5. a bot challenge that does not clear → `blocked`, whatever the HTTP
+     status (it can be 200, and Selenium has none);
+  6. anything else (Chromium's own error page, an interstitial) →
      `blocked` under 401/403/429, a `fetch_error` otherwise.
 
 A Page whose address leads to a private person's profile (no Page behind
@@ -87,7 +89,7 @@ class PageOutcome:
 
 
 # --------------------------------------------------------------------------- #
-# The engine boundary (CLAUDE.md §26)
+# The engine boundary
 # --------------------------------------------------------------------------- #
 class PageSession(_Protocol):
     async def goto(self, url: str) -> Optional[int]: ...  # HTTP status or None; raises on failure
@@ -108,7 +110,7 @@ class Engine(_Protocol):
 
 
 class SolveBudget:
-    """One cap on PAID captcha solves for the whole run (CLAUDE.md §23: a
+    """One cap on PAID captcha solves for the whole run (a
     per-page limit nothing sums is a bill). `limit=0` means never pay."""
 
     def __init__(self, limit: int):
@@ -363,6 +365,14 @@ async def fetch_page(engine: Engine, args, url: str, index: int, proxy_pool) -> 
             outcome.blocked = True
             _log.warning("%s: HTTP %s and not a facebook.com page (%d bytes, title %r) — blocked, not missing.",
                          url, status, len(html or ""), pp.page_title(html))
+        elif is_challenge(html):
+            # A challenge still standing after the wait (and the solve, when
+            # one was allowed) is a block whatever the status said: such
+            # pages are often served under HTTP 200, and Selenium has no
+            # status to read at all.
+            outcome.blocked = True
+            _log.warning("%s: HTTP %s, a bot challenge that did not clear (%d bytes, title %r) — blocked, not missing.",
+                         url, status or "-", len(html or ""), pp.page_title(html))
         else:
             outcome.failure = "fetch_error"
             _log.warning("%s: HTTP %s, not a facebook.com page (%d bytes, title %r) — nothing read. "
@@ -372,7 +382,7 @@ async def fetch_page(engine: Engine, args, url: str, index: int, proxy_pool) -> 
 
         if proxy_pool is not None and proxy is not None:
             if outcome.blocked:
-                proxy_pool.report_failure(proxy, dead=True)  # a block is a property of the EXIT (CLAUDE.md §8)
+                proxy_pool.report_failure(proxy, dead=True)  # a block is a property of the EXIT
             else:
                 proxy_pool.report_success(proxy)
         if getattr(engine, "last_remote_error", False) and not outcome.rows:
@@ -440,7 +450,8 @@ def finish_pages(args, outcomes: List[PageOutcome], *, engine_name: str, urls: L
         if o.failure or o.blocked:
             failed_pages.append(index)
             failures.append({"url": o.url, "reason": o.failure or "blocked"})
-    pages = [{"url": o.url, "state": o.state, "rows": len(o.rows), "posts_shown": o.posts_found, "exact_likes": o.exact_likes,
+    pages = [{"url": o.url, "sku": next((r.sku for r in o.rows if r.category == "page"), None),
+              "state": o.state, "rows": len(o.rows), "posts_shown": o.posts_found, "exact_likes": o.exact_likes,
               "result": ("not_found" if o.not_found else "not_a_page" if o.not_a_page else o.failure
                          or ("blocked" if o.blocked else "ok"))} for o in outcomes]
     return finish(args, products=products, blocked=any(o.blocked for o in outcomes),
@@ -498,6 +509,36 @@ def validate_common(args, *, urls, skipped, print_err) -> Optional[int]:
         print_err(f"Error: the --out directory {str(out_dir)!r} does not exist")
         return EXIT_BAD_USAGE
     return None
+
+
+# Numeric flag validators, shared by every engine so the three CLIs accept
+# and refuse exactly the same values. argparse names the flag in its error
+# line and exits 2 before anything launches. A negative --retries would
+# otherwise run no navigation at all and report the empty document left
+# behind as a failed fetch.
+def positive_int(value: str) -> int:
+    import argparse
+    ivalue = int(value)
+    if ivalue < 1:
+        raise argparse.ArgumentTypeError(f"must be a positive integer (got {value!r})")
+    return ivalue
+
+
+def nonnegative_int(value: str) -> int:
+    import argparse
+    ivalue = int(value)
+    if ivalue < 0:
+        raise argparse.ArgumentTypeError(f"must be >= 0 (got {value!r})")
+    return ivalue
+
+
+def nonnegative_float(value: str) -> float:
+    import argparse
+    import math
+    fvalue = float(value)
+    if not math.isfinite(fvalue) or fvalue < 0:
+        raise argparse.ArgumentTypeError(f"must be a finite number >= 0 (got {value!r})")
+    return fvalue
 
 
 def _posts_count(value: str) -> int:

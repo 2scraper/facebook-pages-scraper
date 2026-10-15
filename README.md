@@ -218,7 +218,8 @@ None, so far. No page in the live runs of 2026-10-05 and 2026-10-06
 (Playwright, Puppeteer and Selenium, direct and through a residential
 proxy, and the Scraper API) carried a captcha widget, iframe or
 challenge. The generic captcha detection stays on, so a real one would
-be reported as blocked rather than read as data.
+be reported as blocked (exit 3) rather than read as data, whatever HTTP
+status it came with.
 
 ## Volume and blocks
 
@@ -232,8 +233,13 @@ reports the rest as `not_attempted`. To read more: rotate residential
 exits with `--proxy-file`, and keep `--delay-between-pages` at 2 seconds
 or more.
 
-**A datacentre address has not been measured yet.** The daily canary
-runs from a GitHub runner only when a proxy secret is configured.
+**A datacentre address is what the daily canary measures**: it runs
+from a GitHub runner with no proxy and goes red if facebook.com refuses
+that address or serves no rows. First run, 2026-10-15: all three Pages
+were served to the runner with no proxy, but with one post each — the
+timeline request that brings posts 2 and 3 delivered nothing within its
+wait on any of them. Whether that is the address or a site change is not
+yet measured from a residential exit.
 
 ## Scraper API mode
 
@@ -268,8 +274,10 @@ writes neither, so it never replaces your previous good file.
 **CSV and safe writes.** In a CSV export, text that a spreadsheet would
 run as a formula (starting with `=`, `+`, `-` or `@`, or with a literal
 leading apostrophe) gets a leading `'`; the sidecar records this
-(`csv_text_encoding: apostrophe-v1`) and `diff_runs.py` restores the
-original text before comparing. JSON is unchanged. Every output file and
+(`csv_text_encoding: apostrophe-v1`, and `csv_cells_escaped` with how
+many cells were changed) and `diff_runs.py` restores the original text
+before comparing. A phone number written `+1 …` is one of them: in the
+CSV it reads `'+1 …`. JSON is unchanged. Every output file and
 sidecar is written to a temporary file first and swapped in only once
 complete, so a failed write never leaves a half-written file over the
 previous good one.
@@ -287,16 +295,18 @@ python3 diff_runs.py monday.json tuesday.json --fields followers,website,phone,r
 `diff_runs.py` matches rows by `sku` and lists, for each, the old and
 new value of every watched field — the Page's name, category,
 description, badge, follower/following/like counts, contacts, hours,
-price range, rating and owner, and each post's text and counts — with a
+price range, rating and owner, the exact like count, and each post's text and counts — with a
 `delta` for numbers. Remember that follower counts are rounded by
 Facebook: "39M" to "40M" is a change of the displayed figure.
 
 A post missing from the next run has usually just been pushed out of the
 three a Page shows, so it is `left_selection`, not `removed`. A Page is
-`removed` only when the new run found its address gone (not found). The
+`removed` only when the new run found its address gone (not found) —
+the address the Page was read from, or the one the new run was given
+for it. The
 diff refuses runs of different inputs, `--posts` or `--max-results`, a
 run that did not complete, and a `.meta.json` that does not match its
-file.
+file, with exit 2.
 
 ## Options
 
@@ -306,7 +316,7 @@ the command line.
 
 | Option | Default | |
 |---|---|---|
-| `--url` / `--urls-file` | | what to read: a Page URL (any tab — `/about` is read as the Page), a username, `@username` or a numeric id; a file has one per line |
+| `--url` / `--urls-file` | `FACEBOOK_URL` (for `--url` only) | what to read: a Page URL (any tab — `/about` is read as the Page), a username, `@username` or a numeric id; a file has one per line. A typed `--urls-file` always wins over `FACEBOOK_URL` |
 | `--posts` | 0 | also write each Page's latest posts, 0–3 |
 | `--exact-likes` | off | also read each Page's exact like count from the Ad Library (one more page load per Page) |
 | `--max-results` | 100 | Pages to read in total (posts not counted); the rest of the list is left out and the run marked `capped` |
@@ -318,7 +328,7 @@ the command line.
 | `--cdp-endpoint` | `FACEBOOK_CDP_ENDPOINT` | connect to a Scraping Browser API profile instead of launching a browser |
 | `--solve-captcha` | when-blocked | `off` disables the Browser API's own captcha auto-solve; there is no local solver |
 | `--max-solves` / `--min-score` | 8 / 0.3 | kept for the local solver, which is disabled; they change nothing today |
-| `--retries` / `--retry-delay` | 2 / 3s | navigation retries per Page |
+| `--retries` / `--retry-delay` | 2 / 3s | navigation retries per Page (extra attempts: `0` means one navigation). Negative numbers for these, `--delay-between-pages`, `--max-solves` and `--proxy-block-retries` are refused with exit 2 by every engine |
 | `--fingerprint` / `--fp-tags` / `--fp-country` | off | apply a 2Captcha Fingerprint API user agent (local browsers only) |
 | `--dump-html` | off | save each Page's HTML next to the output, for debugging |
 | `--allow-empty` | off | write an output file even when nothing was found |
