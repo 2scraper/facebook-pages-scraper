@@ -8,6 +8,8 @@ that changes a default is called out at the top of its entry.
 
 ## [Unreleased]
 
+## [0.2.0] - 2026-10-15
+
 > **Behaviour changes.** (1) A bot challenge that does not clear is now
 > reported as blocked (exit 3) whatever HTTP status it came with; under
 > HTTP 200, or with Selenium (which has no status), it used to end as a
