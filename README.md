@@ -235,7 +235,11 @@ or more.
 
 **A datacentre address is what the daily canary measures**: it runs
 from a GitHub runner with no proxy and goes red if facebook.com refuses
-that address or serves no rows.
+that address or serves no rows. First run, 2026-10-15: all three Pages
+were served to the runner with no proxy, but with one post each — the
+timeline request that brings posts 2 and 3 delivered nothing within its
+wait on any of them. Whether that is the address or a site change is not
+yet measured from a residential exit.
 
 ## Scraper API mode
 
