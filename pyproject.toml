@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "facebook-pages-scraper"
-version = "0.1.1"
+version = "0.2.0"
 description = "Facebook Pages scraper, no login: name, category, followers, website, phone, e-mail, address, hours, rating, owner and the latest posts with exact reactions, comments and shares — Playwright, Puppeteer, Selenium or 2Captcha's Scraper API; proxies, fingerprints"
 readme = "README.md"
 requires-python = ">=3.9"
