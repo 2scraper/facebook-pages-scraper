@@ -8,6 +8,12 @@ that changes a default is called out at the top of its entry.
 
 ## [Unreleased]
 
+### Changed
+
+- CI only: the canary's optional paid secret `FACEBOOK_PROXY` now reaches it only on a new weekly
+  run (Mondays 06:41 UTC) and on a manual dispatch. The daily run keeps its
+  schedule and takes the free route without them, so it bills nothing.
+
 ## [0.2.0] - 2026-10-15
 
 > **Behaviour changes.** (1) A bot challenge that does not clear is now
