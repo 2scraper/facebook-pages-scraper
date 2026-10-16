@@ -233,7 +233,7 @@ reports the rest as `not_attempted`. To read more: rotate residential
 exits with `--proxy-file`, and keep `--delay-between-pages` at 2 seconds
 or more.
 
-**A datacentre address is what the daily canary measures**: it runs
+**A datacentre address is what the weekly canary measures**: it runs
 from a GitHub runner with no proxy and goes red if facebook.com refuses
 that address or serves no rows. First run, 2026-10-15: all three Pages
 were served to the runner with no proxy, but with one post each — the
