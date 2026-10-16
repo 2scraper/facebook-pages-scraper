@@ -142,7 +142,7 @@ Selenium refuses a credentialled endpoint up front (exit 2).
 
 `tests.yml` runs the offline suite on Python 3.9 and 3.12, builds the
 wheel and the Docker image, and runs one `engine-smoke` job per engine.
-`canary.yml` reads three live Pages daily from the bare GitHub runner,
+`canary.yml` reads three live Pages weekly (Mondays) from the bare GitHub runner,
 with no key and no proxy (the `FACEBOOK_PROXY` secret is used when set,
 never required). It never skips: a block, zero rows, a fetch failure or a
 partial run is red. Dispatch it once by hand and read the step results.
