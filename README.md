@@ -1,4 +1,4 @@
-# facebook-pages-scraper
+# Facebook Pages Scraper — Page Contacts, Followers and Posts in Python
 
 ![release](https://img.shields.io/github/v/release/2scraper/facebook-pages-scraper?sort=semver)
 ![tests](https://github.com/2scraper/facebook-pages-scraper/actions/workflows/tests.yml/badge.svg)
@@ -7,6 +7,8 @@
 ![licence](https://img.shields.io/badge/licence-MIT-green)
 ![engines](https://img.shields.io/badge/engines-Playwright%20%7C%20Selenium%20%7C%20Puppeteer-informational)
 ![no login](https://img.shields.io/badge/runs%20without-an%20account-success)
+
+**Facebook Pages scraper** — an open-source (MIT) Python tool that reads public Facebook Pages logged out and writes one row per Page — name, category, followers, website, phone, e-mail, address, opening hours and rating — plus, with `--posts`, its latest posts with exact reaction, comment and share counts, to JSON or CSV. Measured live on 2026-10-06 from an ordinary residential IP with no key and no proxy, 10 Pages and their 30 posts were read in 50 seconds. Use it to build a dataset of Pages' public contact details, or compare two runs with the included diff tool to track follower and post changes.
 
 **Scrape public Facebook Pages into clean JSON or CSV, without logging
 in.** Give it a Page URL, a username or a numeric id, or a file of them;
@@ -396,6 +398,23 @@ Parser and flow checks run on fixtures cut from real captures in
 installs the built wheel outside the checkout, builds the Docker image
 and launches Chromium in it, and runs each engine in its own virtualenv.
 `TESTING.md` describes live testing; `CHANGELOG.md` has the history.
+
+## Guides
+
+- [How to run the 2scraper scrapers: setup, proxies, exit codes and access modes](https://2captcha.com/h/how-to-run-2scraper-open-source-scrapers) — installation, `.env`, `.meta.json` for the whole family.
+
+## Related scrapers
+
+Same CLI conventions, same output contract (one row per item, JSON or CSV, a `.meta.json` sidecar and shared exit codes):
+
+- [Instagram scraper](https://github.com/2scraper/instagram-scraper) — Public profiles, posts and Reels, read logged out
+- [Snapchat scraper](https://github.com/2scraper/snapchat-scraper) — Public Snapchat profiles, Spotlight engagement and story…
+- [TikTok Ad Library scraper](https://github.com/2scraper/tiktok-ads-scraper) — Ads from TikTok's EU Ad Library
+- [TikTok Profile scraper](https://github.com/2scraper/tiktok-profile-scraper) — Exact follower, like and video counts, bio, verification…
+- [TikTok Video scraper](https://github.com/2scraper/tiktok-video-scraper) — TikTok videos with exact engagement, sound, hashtags…
+- [Weibo scraper](https://github.com/2scraper/weibo-scraper) — Hot feed, account timelines and post comments…
+
+All scrapers: [github.com/2scraper](https://github.com/2scraper) · Need another site? [Open a request](https://github.com/2scraper/.github/issues/new?title=%5BScraper%20request%5D%20)
 
 ## Licence
 
